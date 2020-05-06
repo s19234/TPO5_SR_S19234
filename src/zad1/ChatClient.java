@@ -70,11 +70,7 @@ public class ChatClient {
         return response.toString();
     }
 
-    public StringBuilder getLog() {
+    public StringBuilder getChatView(){
         return log;
-    }
-
-    public String getChatView(){
-        return null;
     }
 }

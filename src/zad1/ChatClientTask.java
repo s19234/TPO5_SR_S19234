@@ -14,6 +14,7 @@ import java.util.concurrent.FutureTask;
 
 public class ChatClientTask extends FutureTask<String> {
     private List<ChatClient> list = new LinkedList<>();
+    private int index = 0;
 
     private ChatClientTask(Callable<String> callable, ChatClient client){
         super(callable);
@@ -32,12 +33,12 @@ public class ChatClientTask extends FutureTask<String> {
                     System.out.println(ex.getMessage());
                 }
             });
-            client.getLog().append(client.send(null));
-            return client.getLog().toString();
+            client.getChatView().append(client.send(null));
+            return client.getChatView().toString();
         }, client);
     }
 
     public ChatClient getClient(){
-        return null;
+        return list.get(index++);
     }
 }
