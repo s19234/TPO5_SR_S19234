@@ -24,7 +24,7 @@ public class ChatClientTask extends FutureTask<String> {
     public static ChatClientTask create(ChatClient client, List<String> msgs, int wait){
         return new ChatClientTask(()-> {
             client.connect();
-            client.send(null);
+            client.send(client.getId() + " logged in");
             msgs.forEach((string)->{
                 String response = client.send(string);
                 try {

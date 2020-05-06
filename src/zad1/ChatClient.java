@@ -73,4 +73,8 @@ public class ChatClient {
     public StringBuilder getChatView(){
         return log;
     }
+
+    public String getId() {
+        return id;
+    }
 }
