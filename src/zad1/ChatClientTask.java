@@ -29,6 +29,7 @@ public class ChatClientTask extends FutureTask<String> {
                 String response = client.send(string);
                 try {
                     Thread.currentThread().wait(wait);
+                    System.out.println(response);
                 } catch (InterruptedException ex){
                     System.out.println(ex.getMessage());
                 }
