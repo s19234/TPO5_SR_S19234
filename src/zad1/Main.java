@@ -26,7 +26,7 @@ public class Main {
     List<ChatClientTask> ctasks = new ArrayList<>();
 
     for (String line : test) {
-      String[] elts = line.split("\\s{4,}");
+      String[] elts = line.split("\t");
       String id = elts[0];
       int wait = Integer.valueOf(elts[1]);
       List<String> msgs = new ArrayList<>();

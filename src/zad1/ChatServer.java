@@ -94,7 +94,7 @@ public class ChatServer {
         StringBuilder response = new StringBuilder();
         String[] arr = new String[4];
         arr[3] = "";
-        // no special purposes
+
     }
 
     private void addLogClient(SocketChannel client, String log){
