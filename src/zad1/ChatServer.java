@@ -84,6 +84,7 @@ public class ChatServer {
         if(request.contains("/login ")){
             connectionMap.putIfAbsent(client, new Connection(arr[1]));
             response.append(arr[1]).append(" logged in");
+            log.append(arr[1]).append(" logged in");
         } else if(request.contains("/logout ")){
             response.append(arr[1]).append(" logged out");
             log.append(connectionMap.get(client).id).append(": ");
