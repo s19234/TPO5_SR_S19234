@@ -10,60 +10,63 @@ package zad1;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.channels.*;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 public class ChatServer {
+    private StringBuilder log;
+    private ServerSocketChannel socketChannel;
+    private Selector selector;
+    private static Charset charset = StandardCharsets.UTF_8;
+    private boolean isRunning;
     private String host;
     private int port;
-    private ServerSocketChannel socketChannel;
-    private StringBuilder log;
-    private boolean isRunning;
-    private Selector selector;
-    private SelectionKey selectionKey;
-    private Map<SocketChannel, Connection> map;
+    private Map<SocketChannel, Connection> connectionMap;
+    private String time = null;
 
-    public ChatServer(String host, int port) throws IOException {
+    public ChatServer(String host, int port){
         this.host = host;
         this.port = port;
-        this.socketChannel = ServerSocketChannel.open();
-        this.socketChannel.socket().bind(new InetSocketAddress(this.host, this.port));
-        this.socketChannel.configureBlocking(false);
-        this.selector = Selector.open();
-        this.selectionKey = socketChannel.register(selector, SelectionKey.OP_ACCEPT);
+        this.connectionMap = new HashMap<>();
         this.log = new StringBuilder();
-        this.map = new HashMap<>();
     }
 
-    public void startServer(){
+    public void startServer() throws IOException {
+        socketChannel = ServerSocketChannel.open();
+        socketChannel.socket().bind(new InetSocketAddress(host, port));
+        socketChannel.configureBlocking(false);
+        selector = Selector.open();
+        socketChannel.register(selector, SelectionKey.OP_ACCEPT);
         new Thread(()->{
             isRunning = true;
+            System.out.println("Server started\n");
             while(isRunning){
                 try {
                     selector.select();
-
-                    Set<SelectionKey> selectionKeys = selector.selectedKeys();
-                    Iterator<SelectionKey> iterator = selectionKeys.iterator();
-
+                    Set<SelectionKey> keySet = selector.selectedKeys();
+                    Iterator<SelectionKey> iterator = keySet.iterator();
                     while(iterator.hasNext()){
                         SelectionKey key = iterator.next();
                         iterator.remove();
-
                         if(key.isAcceptable()){
-                            SocketChannel chatClient = socketChannel.accept();
-                            chatClient.configureBlocking(false);
-                            chatClient.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                            SocketChannel client = socketChannel.accept();
+                            client.configureBlocking(false);
+                            client.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
                             continue;
                         }
                         if(key.isReadable()){
-                            SocketChannel chatClient = (SocketChannel)key.channel();
-                            readBytes(chatClient);
+                            SocketChannel client = (SocketChannel)key.channel();
+                            handleRequest(client);
                         }
                     }
                 } catch (IOException ex){
@@ -73,66 +76,71 @@ public class ChatServer {
         }).start();
     }
 
-    private StringBuilder request = new StringBuilder();
-    private ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
-    private static Charset charset = StandardCharsets.UTF_8;
-    private void readBytes(SocketChannel chatClient) throws IOException {
-        if(!chatClient.isOpen()) return;
-        request.setLength(0);
-        byteBuffer.clear();
-
-        for(int bytesRead = chatClient.read(byteBuffer); bytesRead > 0; bytesRead = chatClient.read(byteBuffer)){
-            byteBuffer.flip();
-            CharBuffer charBuffer = charset.decode(byteBuffer);
-            request.append(charBuffer);
-        }
-
-        createResponse(request.toString());
-    }
-
-    private void createResponse(String text){
+    private void handleRequest(SocketChannel client) throws IOException {
         StringBuilder response = new StringBuilder();
-        String[] arr = new String[4];
-        arr[3] = "";
-
-    }
-
-    private void addLogClient(SocketChannel client, String log){
-        if(!map.containsKey(client)){
-            map.put(client, new Connection(log));
+        String request = prepareResponse(client);
+        log.append(time = DateTimeFormatter.ofPattern("HH:mm:ss:SSS").format(LocalDateTime.now())).append(" ");
+        String[] arr = request.split(" ");
+        if(request.contains("/login ")){
+            connectionMap.putIfAbsent(client, new Connection(arr[1]));
+            response.append(arr[1]).append(" logged in");
+        } else if(request.contains("/logout ")){
+            response.append(arr[1]).append(" logged out");
+            log.append(connectionMap.get(client).id).append(": ");
+            log.append(arr[1]).append(" logged out");
+            sendResponse(client, response.toString() + "\n");
+            connectionMap.remove(client);
         } else {
-            map.get(client).log.append(log).append("\n");
+            response.append(connectionMap.get(client).id).append(": ").append(request);
+            log.append(connectionMap.get(client).id).append(": ");
+            log.append(request);
         }
+        log.append("\n");
+        response.append("\n");
+
+        broadcast(response.toString());
     }
 
-    private void log(String log){
-        this.log.append(log).append("\n");
+    private String prepareResponse(SocketChannel client) throws IOException {
+        ByteBuffer inBuf = ByteBuffer.allocateDirect(4096);
+        StringBuilder req = new StringBuilder();
+        for(int bytesRead = client.read(inBuf); bytesRead > 0; bytesRead = client.read(inBuf)){
+            inBuf.flip();
+            req.append(charset.decode(inBuf));
+        }
+        return req.toString();
     }
 
-    public void stopServer(){
-        this.isRunning = false;
+    private void broadcast(String message){
+        connectionMap.forEach((client, connection) -> {
+            try {
+                sendResponse(client, message);
+            } catch (IOException ex){
+                System.out.println(ex.getMessage());
+            }
+        });
     }
 
-    public String getServerLog() {
+    private void sendResponse(SocketChannel client, String response) throws IOException {
+        ByteBuffer outBuf = ByteBuffer.allocateDirect(response.getBytes().length);
+        outBuf.put(charset.encode(response));
+        outBuf.flip();
+        client.write(outBuf);
+    }
+
+    public String getServerLog(){
         return log.toString();
     }
 
+    public void stopServer(){
+        isRunning = false;
+        System.out.println("Server stopped");
+    }
     private static class Connection {
-        private StringBuilder log;
         private String id;
 
-        Connection(String id){
+        public Connection(String id){
             this.id = id;
-            this.log = new StringBuilder("\n=== " + id + " log start ===\n");
-        }
-
-        public void close() {
-            this.log.append("=== ").append(id).append(" log end ===\n");
-        }
-
-        @Override
-        public String toString() {
-            return log.toString();
         }
     }
 }
